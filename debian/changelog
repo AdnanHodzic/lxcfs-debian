@@ -1,4 +1,4 @@
-lxcfs (2.0.0~rc6) unstable; urgency=medium
+lxcfs (2.0.0~rc6-1) unstable; urgency=medium
 
   * Initial Debian package release (closes: 775021)
 
