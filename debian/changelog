@@ -1,0 +1,5 @@
+lxcfs (2.0.0~rc6) unstable; urgency=medium
+
+  * Initial Debian package release (closes: 775021)
+
+ -- Adnan Hodzic <adnan@hodzic.org>  Sat, 19 Mar 2016 18:19:29 +0100

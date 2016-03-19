@@ -1,0 +1,47 @@
+https://github.com/lxc/lxcfs/pull/98
+
+--- lxcfs-2.0.0~rc6.orig/share/lxc.mount.hook.in
++++ lxcfs-2.0.0~rc6/share/lxc.mount.hook.in
+@@ -28,18 +28,36 @@ fi
+ # /sys/fs/cgroup files
+ if [ -d "${LXC_ROOTFS_MOUNT}/sys/fs/cgroup" ]; then
+     if [ -d @LXCFSTARGETDIR@/cgroup ]; then
+-        for entry in @LXCFSTARGETDIR@/cgroup/*; do
++        # Cleanup existing mounts
++        for entry in ${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/*; do
+             DEST=$(basename $entry)
+-            if [ "$DEST" = "name=systemd" ]; then
+-                DEST="systemd"
++
++            if [ "${DEST}" = "cgmanager" ]; then
++                continue
+             fi
+ 
+-            if mountpoint -q ${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/$DEST; then
++            if [ ! -d "${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/${DEST}" ]; then
+                 continue
+             fi
+ 
+-            if [ ! -d ${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/$DEST ]; then
+-                mkdir ${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/$DEST
++            while grep "${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/${DEST}" /proc/self/mountinfo; do
++                grep "${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/${DEST}" /proc/self/mountinfo | cut -d' ' -f5 | while read line; do
++                     mountpoint -q ${line} && umount -l ${line} || true
++                done
++            done
++
++            rm -Rf ${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/${DEST}
++        done
++
++        # Mount the new entries
++        for entry in @LXCFSTARGETDIR@/cgroup/*; do
++            DEST=$(basename $entry)
++            if [ "$DEST" = "name=systemd" ]; then
++                DEST="systemd"
++            fi
++
++            if [ ! -d ${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/${DEST} ]; then
++                mkdir ${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/${DEST}
+             fi
+ 
+             mount -n --bind $entry ${LXC_ROOTFS_MOUNT}/sys/fs/cgroup/$DEST
