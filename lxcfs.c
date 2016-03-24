@@ -67,7 +67,7 @@ static void users_unlock(void)
 	unlock_mutex(&user_count_mutex);
 }
 
-static int need_reload;
+static volatile sig_atomic_t need_reload;
 
 /* do_reload - reload the dynamic library.  Done under
  * lock and when we know the user_count was 0 */
@@ -111,10 +111,7 @@ static void down_users(void)
 
 static void reload_handler(int sig)
 {
-	fprintf(stderr, "lxcfs: caught a SIGUSR1.  Reloading\n");
-	users_lock();
 	need_reload = 1;
-	users_unlock();
 }
 
 /* Functions to run the library methods */
@@ -312,6 +309,21 @@ static int do_cg_open(const char *path, struct fuse_file_info *fi)
 	return cg_open(path, fi);
 }
 
+static int do_cg_access(const char *path, int mode)
+{
+	int (*cg_access)(const char *path, int mode);
+	char *error;
+	dlerror();    /* Clear any existing error */
+	cg_access = (int (*)(const char *, int mode)) dlsym(dlopen_handle, "cg_access");
+	error = dlerror();
+	if (error != NULL) {
+		fprintf(stderr, "cg_access: %s\n", error);
+		return -1;
+	}
+
+	return cg_access(path, mode);
+}
+
 static int do_proc_open(const char *path, struct fuse_file_info *fi)
 {
 	int (*proc_open)(const char *path, struct fuse_file_info *fi);
@@ -325,6 +337,21 @@ static int do_proc_open(const char *path, struct fuse_file_info *fi)
 	}
 
 	return proc_open(path, fi);
+}
+
+static int do_proc_access(const char *path, int mode)
+{
+	int (*proc_access)(const char *path, int mode);
+	char *error;
+	dlerror();    /* Clear any existing error */
+	proc_access = (int (*)(const char *, int mode)) dlsym(dlopen_handle, "proc_access");
+	error = dlerror();
+	if (error != NULL) {
+		fprintf(stderr, "proc_access: %s\n", error);
+		return -1;
+	}
+
+	return proc_access(path, mode);
 }
 
 static int do_cg_release(const char *path, struct fuse_file_info *fi)
@@ -455,6 +482,25 @@ static int lxcfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, of
 		down_users();
 		return ret;
 	}
+	return -EINVAL;
+}
+
+static int lxcfs_access(const char *path, int mode)
+{
+	int ret;
+	if (strncmp(path, "/cgroup", 7) == 0) {
+		up_users();
+		ret = do_cg_access(path, mode);
+		down_users();
+		return ret;
+	}
+	if (strncmp(path, "/proc", 5) == 0) {
+		up_users();
+		ret = do_proc_access(path, mode);
+		down_users();
+		return ret;
+	}
+
 	return -EINVAL;
 }
 
@@ -655,7 +701,7 @@ const struct fuse_operations lxcfs_ops = {
 	.fsyncdir = NULL,
 	.init = NULL,
 	.destroy = NULL,
-	.access = NULL,
+	.access = lxcfs_access,
 	.create = NULL,
 	.ftruncate = NULL,
 	.fgetattr = NULL,
@@ -914,7 +960,10 @@ int main(int argc, char *argv[])
 		usage(argv[0]);
 
 	do_reload();
-	signal(SIGUSR1, reload_handler);
+	if (signal(SIGUSR1, reload_handler) == SIG_ERR) {
+		fprintf(stderr, "Error setting USR1 signal handler: %m\n");
+		exit(1);
+	}
 
 	newargv[cnt++] = argv[0];
 	newargv[cnt++] = "-f";

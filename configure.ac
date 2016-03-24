@@ -1,7 +1,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT([lxcfs], [2.0.0.rc6], [lxc-devel@lists.linuxcontainers.org])
+AC_INIT([lxcfs], [2.0.0.rc8], [lxc-devel@lists.linuxcontainers.org])
 AC_SUBST(ACLOCAL_AMFLAGS, "-I m4")
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -21,8 +21,6 @@ AC_CONFIG_FILES([
 	share/lxc.mount.hook
 	share/lxc.reboot.hook
 	tests/Makefile ])
-
-AM_INIT_AUTOMAKE
 
 LT_INIT
 AC_PROG_CC
